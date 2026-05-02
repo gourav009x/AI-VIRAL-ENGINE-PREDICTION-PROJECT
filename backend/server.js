@@ -37,40 +37,50 @@ try {
 // Endpoint to handle everything for the frontend
 app.post('/api/content/predict', async (req, res) => {
     try {
-        const { caption, hashtags, category } = req.body;
+        const { caption, hashtags, category, tone } = req.body;
         
-        let engagementRes, captionsRes, hashtagsRes, timeRes;
+        let engagementRes, captionsRes, hashtagsRes, timeRes, competitorRes, abTestRes;
 
         try {
             // Attempt parallel requests to Java ML service
-            [engagementRes, captionsRes, hashtagsRes, timeRes] = await Promise.all([
+            [engagementRes, captionsRes, hashtagsRes, timeRes, competitorRes, abTestRes] = await Promise.all([
                 fetch(`${ML_SERVICE_URL}/predict-engagement`, {
                     method: 'POST', body: JSON.stringify({ caption }), headers: { 'Content-Type': 'application/json' }
                 }).then(r => r.json()),
                 fetch(`${ML_SERVICE_URL}/suggest-captions`, {
-                    method: 'POST', body: JSON.stringify({ caption }), headers: { 'Content-Type': 'application/json' }
+                    method: 'POST', body: JSON.stringify({ caption, tone }), headers: { 'Content-Type': 'application/json' }
                 }).then(r => r.json()),
                 fetch(`${ML_SERVICE_URL}/recommend-hashtags`, {
                     method: 'POST', body: JSON.stringify({ category }), headers: { 'Content-Type': 'application/json' }
                 }).then(r => r.json()),
                 fetch(`${ML_SERVICE_URL}/predict-time`, {
                     method: 'POST', body: JSON.stringify({ category }), headers: { 'Content-Type': 'application/json' }
+                }).then(r => r.json()),
+                fetch(`${ML_SERVICE_URL}/competitor-analysis`, {
+                    method: 'POST', body: JSON.stringify({ category }), headers: { 'Content-Type': 'application/json' }
+                }).then(r => r.json()),
+                fetch(`${ML_SERVICE_URL}/ab-testing`, {
+                    method: 'POST', body: JSON.stringify({ caption }), headers: { 'Content-Type': 'application/json' }
                 }).then(r => r.json())
             ]);
         } catch (mlError) {
             console.warn("Java ML service unreachable. Using backend JS fallback mocks.", mlError.message);
             // Fallback mocks
-            engagementRes = { engagementScore: 40.0 + Math.min(60.0, (caption || "").length * 0.5), confidence: 0.85 };
+            engagementRes = { engagementScore: 40.0 + Math.min(60.0, (caption || "").length * 0.5), confidence: 0.85, history: [{day:'Day 1', score: 30}, {day:'Day 2', score: 50}] };
             captionsRes = { suggestions: ["🔥 " + caption + " #MustWatch", caption + " - What do you think? 👇", "You won't believe this! " + caption] };
             hashtagsRes = { hashtags: ["#" + category, "#viral", "#trending", "#foryou", "#explore"] };
             timeRes = { bestPostingTime: "18:30", timezone: "UTC" };
+            competitorRes = { topCompetitorAvgEngagement: 85.2, competitorKeywords: ["secret", "tutorial", category], marketSaturation: "Medium" };
+            abTestRes = { suggestions: [{variant:"A", hook:"Question", example:"QA: "+caption}, {variant:"B", hook:"Stat", example:"99%: "+caption}] };
         }
 
         const predictions = {
             engagement: engagementRes,
             captions: captionsRes.suggestions,
             hashtags: hashtagsRes.hashtags,
-            time: timeRes
+            time: timeRes,
+            competitor: competitorRes,
+            abTesting: abTestRes.suggestions
         };
 
         // Save to DB if connected
@@ -82,7 +92,7 @@ app.post('/api/content/predict', async (req, res) => {
         // Simulate network delay for effect
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        res.json({ success: true, original: { caption, hashtags, category }, predictions });
+        res.json({ success: true, original: { caption, hashtags, category, tone }, predictions });
     } catch (error) {
         console.error('Error in predict:', error);
         res.status(500).json({ success: false, error: 'Failed to generate predictions' });
@@ -102,6 +112,10 @@ app.get('/api/content/history', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Backend server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`Backend server running on port ${PORT}`);
+    });
+}
+
+module.exports = app;
