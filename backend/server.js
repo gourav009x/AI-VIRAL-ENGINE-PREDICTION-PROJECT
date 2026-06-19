@@ -112,7 +112,7 @@ app.get('/api/content/history', async (req, res) => {
     }
 });
 
-if (process.env.NODE_ENV !== 'production') {
+if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`Backend server running on port ${PORT}`);
     });

@@ -34,7 +34,7 @@ function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.MODE === 'production' ? '' : 'http://localhost:5000');
       const response = await fetch(`${apiUrl}/api/content/predict`, {
         method: 'POST',
         headers: {
